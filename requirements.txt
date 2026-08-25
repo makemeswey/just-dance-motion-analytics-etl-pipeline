@@ -1,3 +1,5 @@
 joycon-python
 hidapi
 pyglm
+pika
+json

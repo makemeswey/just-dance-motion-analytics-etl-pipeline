@@ -1,0 +1,21 @@
+services: # Defining applications 
+  rabbitmq:
+    image: rabbitmq:4-management # Uses rabbitmq 4 as docker image
+    container_name: rabbitmq # Docker container name
+    restart: always
+    ports:
+      # AMQP (Advanced Message Queuing Protocol) protocol port
+      # AMQP: Open standard protocol for message-oriented middleware 
+      - "5672:5672"
+      # HTTP Management UI port
+      - "15672:15672"
+    environment:
+      - RABBITMQ_DEFAULT_USER=admin
+      - RABBITMQ_DEFAULT_PASS=supersecretpassword
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq/ # Message payloads, queue metadata, schema definitions
+      - rabbitmq_logs:/var/log/rabbitmq # Server logs, connection events, authentication failures 
+
+volumes:
+  rabbitmq_data:
+  rabbitmq_logs:
