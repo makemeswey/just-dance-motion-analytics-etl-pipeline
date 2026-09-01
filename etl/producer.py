@@ -3,15 +3,14 @@ import time
 import os
 import pika
 import json
+from dotenv import load_dotenv
+from features import calc_rotational_speed, calc_dynamic_linear_acc
 
-# Helper function to calculate vector magnitude rounded to 4dp
-def calc_vector_magnitude(x,y,z):
-    return round((x*x + y*y + z*z) ** 0.5, 4)
-
-def get_joycon_acc_gyro():
-    credentials = pika.PlainCredentials('swetha', 'Kitty123!!')
-    connection = pika.BlockingConnection(pika.ConnectionParameters(host="localhost", 
-                                                                   port = 5672, 
+def get_joycon_details(song_name):
+    load_dotenv()
+    credentials = pika.PlainCredentials(os.getenv("USERNAME"), os.getenv("PASSWORD"))
+    connection = pika.BlockingConnection(pika.ConnectionParameters(host=os.getenv("HOST_NAME"), 
+                                                                   port =os.getenv("PORT"), 
                                                                    virtual_host= '/', 
                                                                    credentials=credentials))
     channel = connection.channel()
@@ -39,11 +38,14 @@ def get_joycon_acc_gyro():
             gy = round(gyro.get('y')/4096, 4)
             gz = round(gyro.get('z')/4096, 4)
 
-            la = calc_vector_magnitude(ax, ay, az)
-            rs = calc_vector_magnitude(gx, gy, gz)
+            la = calc_dynamic_linear_acc(ax, ay, az) # dynamic linear acceleration
+            rs = calc_rotational_speed(gx, gy, gz) # rotational speed
+
+            tp = round(la + rs, 4) # total power 
 
             payload = {
                 "timestamp": current_time,
+                "song_name": song_name,
                 "ax": ax,
                 "ay": ay,
                 "az": az,
@@ -51,7 +53,8 @@ def get_joycon_acc_gyro():
                 "gy": gy,
                 "gz": gz,
                 "la": la,
-                "rs": rs
+                "rs": rs,
+                "tp": tp
             }
 
             channel.basic_publish(
@@ -63,7 +66,7 @@ def get_joycon_acc_gyro():
                 )
             )
 
-            time.sleep(0.1) # Wait 0.1s or 100ms
+            time.sleep(0.001) # Wait 0.1s or 100ms
 
     except ValueError:
         print("Joycon not found")
@@ -72,4 +75,5 @@ def get_joycon_acc_gyro():
         connection.close()
 
 if __name__ == "__main__":
-    get_joycon_acc_gyro()
+    song_name = str(input("Enter song name: "))
+    get_joycon_details(song_name.lower())
