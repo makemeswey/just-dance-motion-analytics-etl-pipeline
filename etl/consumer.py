@@ -3,39 +3,81 @@ import sys
 import os
 import json
 import csv
+from dotenv import load_dotenv
+from elasticsearch import Elasticsearch
+from datetime import datetime, timezone 
 
 def main():
-    filename = "telemetry_logs.csv"
-    header = ["timestamp", "ax", "ay", "az", "gx", "gy", "gz", "la", "rs"] # row headers
+    load_dotenv()
 
-    with open(filename, mode="a", newline="", encoding="utf8") as f: # utf-8 supports universal characters
-            writer = csv.writer(f) # Write data directly to csv file
-    
-            if os.stat(filename).st_size == 0: # If file is empty, write the row headers, stat - status
-                writer.writerow(header)
+    es = Elasticsearch(
+        os.getenv("ES_HOST"),
+        basic_auth=(
+            os.getenv("ES_USERNAME"),
+            os.getenv("ES_PASSWORD")
+        ),
+        verify_certs=False,
+        ssl_show_warn=False,
+        request_timeout=30
+    )
+
+    if not es.ping():
+        raise ConnectionError("Cannot reach Elasticsearch cluster")
+    print("[✓] Connected to Elasticsearch")
+
+    INDEX_NAME = "joycon_telemetry"
+
+    if not es.indices.exists(index=INDEX_NAME):
+        mapping = {
+            "settings": {
+                "number_of_shards": 1,
+                "number_of_replicas": 0,       # fine for dev; raise in prod
+            },
+            "mappings": {
+                "properties": {
+                    "song_name": {"type": "keyword"},          # exact-match filtering
+                    "timestamp": {"type": "date"},             # ISO-8601 or epoch_millis
+                    "ax":        {"type": "float"},            # accelerometer x
+                    "ay":        {"type": "float"},            # accelerometer y
+                    "az":        {"type": "float"},            # accelerometer z
+                    "gx":        {"type": "float"},            # gyroscope x
+                    "gy":        {"type": "float"},            # gyroscope y
+                    "gz":        {"type": "float"},            # gyroscope z
+                    "la":        {"type": "float"},            # linear acceleration
+                    "rs":        {"type": "float"},            # rotation speed
+                    "tp":        {"type": "float"},            # temperature
+                    "ingested_at": {"type": "date"},           # when ES received it
+                }
+            }
+        }
+
 
 
     def callback(ch, method, properties, body):
         data = json.loads(body)
 
-        with open(filename, "a", newline="") as f:
-            writer = csv.writer(f)
-            
-            writer.writerow([
-                 data["timestamp"],
-                 data["ax"],
-                 data["ay"],
-                 data["az"],
-                 data["gx"],
-                 data["gy"],
-                 data["gz"],
-                 data["la"],
-                 data["rs"]
-            ])
+        document = {
+            "song_name": data["song_name"],
+            "timestamp": data["timestamp"],
+            "ax":        data["ax"],
+            "ay":        data["ay"],
+            "az":        data["az"],
+            "gx":        data["gx"],
+            "gy":        data["gy"],
+            "gz":        data["gz"],
+            "la":        data["la"],
+            "rs":        data["rs"],
+            "tp":        data["tp"],
+            "ingested_at": datetime.now(timezone.utc).isoformat(),   # extra metadata
+        }
 
-    credentials = pika.PlainCredentials('swetha', 'Kitty123!!')
-    connection = pika.BlockingConnection(pika.ConnectionParameters(host='localhost',
-                                        port = 5672,
+        response = es.index(index=INDEX_NAME, document=document)
+        print(f"  → indexed doc  id={response['_id']}  result={response['result']}")
+
+    credentials = pika.PlainCredentials(os.getenv("USERNAME"), os.getenv("PASSWORD"))
+    connection = pika.BlockingConnection(pika.ConnectionParameters(
+                                        host=os.getenv("HOST_NAME"),
+                                        port=os.getenv("PORT"),
                                         virtual_host= '/',
                                         credentials=credentials))
     channel = connection.channel()
