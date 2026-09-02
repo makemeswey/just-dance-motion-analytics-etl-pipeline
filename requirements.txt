@@ -3,3 +3,5 @@ hidapi
 pyglm
 pika
 json
+python-dotenv
+elasticsearch
