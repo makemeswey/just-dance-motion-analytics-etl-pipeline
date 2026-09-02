@@ -5,8 +5,9 @@ import pika
 import json
 from dotenv import load_dotenv
 from features import calc_rotational_speed, calc_dynamic_linear_acc
+from datetime import datetime, timezone 
 
-def get_joycon_details(song_name):
+def get_joycon_details():
     load_dotenv()
     credentials = pika.PlainCredentials(os.getenv("USERNAME"), os.getenv("PASSWORD"))
     connection = pika.BlockingConnection(pika.ConnectionParameters(host=os.getenv("HOST_NAME"), 
@@ -22,13 +23,14 @@ def get_joycon_details(song_name):
         joycon_id = get_R_id() or get_L_id() # gets ID of right joycon or left joycon
         joycon = JoyCon(*joycon_id) # Passes joycon id to JoyCon class as a dict
 
+        song_name = str(input("Enter song name: "))
         while True:
 
             status = joycon.get_status() # Get joycon status values as dict
             accel = status.get('accel', {}) # Extract acceleration from dict
             gyro = status.get('gyro', {}) # Extract gyro from dict
 
-            current_time = time.strftime("%Y-%m-%d %H:%M:%S") # Shows current day and time
+            current_time = datetime.now(timezone.utc).isoformat() # Shows current day and time
 
             ax = round(accel.get('x')/4096,4)
             ay = round(accel.get('y')/4096, 4)
@@ -66,7 +68,7 @@ def get_joycon_details(song_name):
                 )
             )
 
-            time.sleep(0.001) # Wait 0.1s or 100ms
+            time.sleep(0.1) 
 
     except ValueError:
         print("Joycon not found")
@@ -75,5 +77,4 @@ def get_joycon_details(song_name):
         connection.close()
 
 if __name__ == "__main__":
-    song_name = str(input("Enter song name: "))
-    get_joycon_details(song_name.lower())
+    get_joycon_details()

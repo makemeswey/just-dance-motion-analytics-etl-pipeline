@@ -51,25 +51,32 @@ def main():
             }
         }
 
+        es.indices.create(index=INDEX_NAME, body=mapping)
+
 
 
     def callback(ch, method, properties, body):
         data = json.loads(body)
 
+        song_name = data.get("song_name", "Unknown")
+        timestamp = data.get("timestamp")
+
+        print(f"Received song_name: '{data.get('song_name')}' | timestamp: {data.get('timestamp')}")
+
         document = {
-            "song_name": data["song_name"],
-            "timestamp": data["timestamp"],
-            "ax":        data["ax"],
-            "ay":        data["ay"],
-            "az":        data["az"],
-            "gx":        data["gx"],
-            "gy":        data["gy"],
-            "gz":        data["gz"],
-            "la":        data["la"],
-            "rs":        data["rs"],
-            "tp":        data["tp"],
-            "ingested_at": datetime.now(timezone.utc).isoformat(),   # extra metadata
-        }
+                "song_name": song_name,
+                "timestamp": timestamp,
+                "ax":        data.get("ax", 0.0),
+                "ay":        data.get("ay", 0.0),
+                "az":        data.get("az", 0.0),
+                "gx":        data.get("gx", 0.0),
+                "gy":        data.get("gy", 0.0),
+                "gz":        data.get("gz", 0.0),
+                "la":        data.get("la", 0.0),
+                "rs":        data.get("rs", 0.0),
+                "tp":        data.get("tp", 0.0),
+                "ingested_at": datetime.now(timezone.utc).isoformat(),
+            }
 
         response = es.index(index=INDEX_NAME, document=document)
         print(f"  → indexed doc  id={response['_id']}  result={response['result']}")
@@ -81,6 +88,9 @@ def main():
                                         virtual_host= '/',
                                         credentials=credentials))
     channel = connection.channel()
+
+    channel.queue_purge(queue='joycon_telemetry')
+    print("[✓] Queue purged of legacy messages.")
 
     channel.basic_consume(queue='joycon_telemetry',
                         auto_ack=True,
