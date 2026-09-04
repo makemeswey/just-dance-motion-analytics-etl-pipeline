@@ -10,12 +10,14 @@ from datetime import datetime, timezone
 def main():
     load_dotenv()
 
+    # Only send credentials when they exist; the compose cluster runs with
+    # xpack.security disabled and has no users to authenticate against.
+    es_user = os.getenv("ES_USERNAME")
+    es_password = os.getenv("ES_PASSWORD")
+
     es = Elasticsearch(
-        os.getenv("ES_HOST"),
-        basic_auth=(
-            os.getenv("ES_USERNAME"),
-            os.getenv("ES_PASSWORD")
-        ),
+        os.getenv("ES_HOST", "http://localhost:9200"),
+        basic_auth=(es_user, es_password) if es_user and es_password else None,
         verify_certs=False,
         ssl_show_warn=False,
         request_timeout=30
@@ -45,7 +47,7 @@ def main():
                     "gz":        {"type": "float"},            # gyroscope z
                     "la":        {"type": "float"},            # linear acceleration
                     "rs":        {"type": "float"},            # rotation speed
-                    "tp":        {"type": "float"},            # temperature
+                    "tp":        {"type": "float"},            # total power 
                     "ingested_at": {"type": "date"},           # when ES received it
                 }
             }
@@ -81,13 +83,17 @@ def main():
         response = es.index(index=INDEX_NAME, document=document)
         print(f"  → indexed doc  id={response['_id']}  result={response['result']}")
 
-    credentials = pika.PlainCredentials(os.getenv("USERNAME"), os.getenv("PASSWORD"))
+    credentials = pika.PlainCredentials(os.getenv("RABBITMQ_USERNAME"), os.getenv("RABBITMQ_PASSWORD"))
     connection = pika.BlockingConnection(pika.ConnectionParameters(
-                                        host=os.getenv("HOST_NAME"),
-                                        port=os.getenv("PORT"),
+                                        host=os.getenv("RABBITMQ_HOST", "localhost"),
+                                        port=int(os.getenv("RABBITMQ_PORT", 5672)),
                                         virtual_host= '/',
                                         credentials=credentials))
     channel = connection.channel()
+
+    # Declared here too (idempotent, must match the producer's arguments) so the
+    # consumer can start before the producer has ever run.
+    channel.queue_declare(queue='joycon_telemetry', durable=True, arguments={'x-queue-type': 'classic'})
 
     channel.queue_purge(queue='joycon_telemetry')
     print("[✓] Queue purged of legacy messages.")
