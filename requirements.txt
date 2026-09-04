@@ -2,6 +2,5 @@ joycon-python
 hidapi
 pyglm
 pika
-json
 python-dotenv
-elasticsearch
+elasticsearch>=8.15,<9

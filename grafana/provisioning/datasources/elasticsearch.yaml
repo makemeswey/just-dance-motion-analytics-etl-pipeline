@@ -1,0 +1,16 @@
+apiVersion: 1
+
+datasources:
+  # uid must stay efwye3xu8h14wc — the dashboard panels reference it by uid
+  - name: elasticsearch
+    uid: efwye3xu8h14wc
+    type: elasticsearch
+    access: proxy
+    url: http://elasticsearch:9200 # in-network address; no auth, security is disabled
+    isDefault: true
+    editable: true
+    jsonData:
+      index: joycon_telemetry
+      timeField: ingested_at
+      maxConcurrentShardRequests: 5
+      includeFrozen: false

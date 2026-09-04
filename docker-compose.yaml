@@ -1,21 +1,74 @@
-services: # Defining applications 
+services: # Defining applications
   rabbitmq:
     image: rabbitmq:4-management # Uses rabbitmq 4 as docker image
-    container_name: rabbitmq # Docker container name
     restart: always
     ports:
       # AMQP (Advanced Message Queuing Protocol) protocol port
-      # AMQP: Open standard protocol for message-oriented middleware 
+      # AMQP: Open standard protocol for message-oriented middleware
       - "5672:5672"
       # HTTP Management UI port
       - "15672:15672"
     environment:
-      - RABBITMQ_DEFAULT_USER=admin
-      - RABBITMQ_DEFAULT_PASS=supersecretpassword
+      - RABBITMQ_DEFAULT_USER=${RABBITMQ_USERNAME}
+      - RABBITMQ_DEFAULT_PASS=${RABBITMQ_PASSWORD}
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"] # Verify container is alive 
+      interval: 10s
+      timeout: 5s
+      retries: 12
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq/ # Message payloads, queue metadata, schema definitions
-      - rabbitmq_logs:/var/log/rabbitmq # Server logs, connection events, authentication failures 
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.15.0
+    restart: always
+    ports:
+      - "9200:9200"
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false # No TLS, no users: dev only
+      - ES_JAVA_OPTS=-Xms512m -Xmx512m # Cap the heap, or ES sizes it off the whole Docker VM
+    ulimits:
+      memlock: -1 # Disables memory swapping
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs http://localhost:9200/_cluster/health || exit 1"] # Check cluster is healthy
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data/
+
+  grafana:
+    image: grafana/grafana:13.2.1 # matches the version the dashboard was exported from
+    restart: always
+    ports:
+      - "3000:3000"
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    volumes:
+      - grafana_data:/var/lib/grafana/
+      # Datasource and dashboard live in git, so a fresh volume still comes up configured
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+
+  consumer:
+    build: . # Dockerfile copies etl/ to /app and runs consumer.py
+    restart: always
+    environment:
+      # Service names and in-network ports, not the host-side values from .env
+      - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_PORT=5672
+      - RABBITMQ_USERNAME=${RABBITMQ_USERNAME}
+      - RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD}
+      - ES_HOST=http://elasticsearch:9200
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
 
 volumes:
   rabbitmq_data:
-  rabbitmq_logs:
+  elasticsearch_data:
+  grafana_data:

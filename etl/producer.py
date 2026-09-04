@@ -4,14 +4,14 @@ import os
 import pika
 import json
 from dotenv import load_dotenv
-from features import calc_rotational_speed, calc_dynamic_linear_acc
+from features import calc_rotational_speed, calc_dynamic_acc, calc_power_proxy
 from datetime import datetime, timezone 
 
 def get_joycon_details():
     load_dotenv()
-    credentials = pika.PlainCredentials(os.getenv("USERNAME"), os.getenv("PASSWORD"))
-    connection = pika.BlockingConnection(pika.ConnectionParameters(host=os.getenv("HOST_NAME"), 
-                                                                   port =os.getenv("PORT"), 
+    credentials = pika.PlainCredentials(os.getenv("RABBITMQ_USERNAME"), os.getenv("RABBITMQ_PASSWORD"))
+    connection = pika.BlockingConnection(pika.ConnectionParameters(host=os.getenv("RABBITMQ_HOST", "localhost"), 
+                                                                   port=int(os.getenv("RABBITMQ_PORT", 5672)), 
                                                                    virtual_host= '/', 
                                                                    credentials=credentials))
     channel = connection.channel()
@@ -40,10 +40,10 @@ def get_joycon_details():
             gy = round(gyro.get('y')/4096, 4)
             gz = round(gyro.get('z')/4096, 4)
 
-            la = calc_dynamic_linear_acc(ax, ay, az) # dynamic linear acceleration
+            la = calc_dynamic_acc(ax, ay, az) # dynamic acceleration
             rs = calc_rotational_speed(gx, gy, gz) # rotational speed
 
-            tp = round(la + rs, 4) # total power 
+            tp = round(calc_power_proxy(ax, ay, az) + calc_power_proxy(gx, gy, gz), 4) # total power 
 
             payload = {
                 "timestamp": current_time,

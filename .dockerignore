@@ -1,0 +1,6 @@
+.env
+.git
+motion_venv
+images
+tests
+**/__pycache__
